@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        
+    </head>
+    <body style="margin: 0;">
+        <div id="monitor" style="background-color: black;"></div>
+
+        <script>
+            // Abmesungen Monitor wird auch für Spiele gebraucht
+            const MONITOR = {w: window.innerWidth, h: window.innerHeight, dom: document.querySelector('#monitor')}
+        </script>
+        <!-- Crafty -->
+        <script type="text/javascript" src="https://rawgithub.com/craftyjs/Crafty/release/dist/crafty-min.js"></script>
+        <!-- Spiele -->
+        <script type ="text/javascript" src="./jaegermeister/jaegermeister.js"></script>
+        <script type ="text/javascript" src="./spiegeltrinker/spiegeltrinker.js"></script>
+        <script type ="text/javascript" src="./heidenspass/heidenspass.js"></script>
+
+        <script>
+            // hole Querystrings
+            let searchParameter = new URLSearchParams(window.location.search);
+            // initiiere mapSpiele
+            let mapSpiele = {'jaegermeister': Jaegermeister, 'heidenspass': Heidenspass, 'spiegeltrinker': Spiegeltrinker};
+            // initiiere arrSpiele
+            let arrSpiele = Object.values(mapSpiele);
+            let indexSpiel = 0;
+            // initiiere spiel aktuell
+            const bezeichnungSpiel = searchParameter.get('spiel');
+            const pokalmodus = bezeichnungSpiel ? false : true; // wenn kein Spiel angegeben -> Pokalmodus
+            let spielAktuell = pokalmodus ? arrSpiele[indexSpiel] : mapSpiele[bezeichnungSpiel];
+            let charakter;
+            // initiiere punktestand
+            let punktestand = searchParameter.get('punkte') || 0;
+            // lade Startszene von SpielAktuell
+            Crafty.init(MONITOR.w, MONITOR.h, MONITOR.dom);
+            Crafty.scene('startbildschirm', function() {
+                // Titelgrafik
+                Crafty.e('2D, Canvas, Image')
+                    .attr({
+                        x: MONITOR.w / 2 - spielAktuell.titelgrafik.w / 2, 
+                        y: MONITOR.h / 2 - spielAktuell.titelgrafik.h / 2,
+                        w: spielAktuell.titelgrafik.w,
+                        h: spielAktuell.titelgrafik.h,
+                    })
+                    .image(spielAktuell.titelgrafik.pfad);
+                // Startbutton
+                const STARTBUTTON = {w: 400, h: 119}
+                Crafty.e('2D, Canvas, Mouse, Image')
+                    .attr({
+                        x: MONITOR.w / 2 - STARTBUTTON.w / 2, 
+                        y: MONITOR.h - (STARTBUTTON.h + 30),
+                        w: STARTBUTTON.w,
+                        h: STARTBUTTON.h,
+                    })
+                    .image('./startbutton.png')
+                    .bind('Click', function() {Crafty.scene(spielAktuell.bezeichnungSceneSpiel)})
+            })
+            Crafty.scene('startbildschirm');
+            // vorbereite Endbildschirm
+            const TEXT_PUNKTE = {w: 300, h: 100}
+            Crafty.scene('endbildschirm', function() {
+                // Punktestand
+                Crafty.e('2D, Canvas, Text')
+                    .attr({
+                        x: MONITOR.w / 2, 
+                        y: MONITOR.h / 2 - TEXT_PUNKTE.h / 2,
+                    })
+                    .text(function() {return `Punkte: ${punktestand}`})
+                    .textColor('white')
+                    .textFont({size: `${TEXT_PUNKTE.h}px`, family: 'Courier'})
+                    .textAlign('center')
+                // Weiter-Button
+                const WEITERBUTTON = {w: 400, h: 119}
+                if (pokalmodus && (indexSpiel < arrSpiele.length - 1)) {
+                    Crafty.e('2D, Canvas, Mouse, Image')
+                        .attr({
+                            x: MONITOR.w / 2 - WEITERBUTTON.w / 2, 
+                            y: MONITOR.h - (WEITERBUTTON.h + 30),
+                            w: WEITERBUTTON.w,
+                            h: WEITERBUTTON.h,
+                        })
+                        .image('./startbutton.png')
+                        .bind('Click', function() {
+                            indexSpiel++;
+                            spielAktuell = arrSpiele[indexSpiel];
+                            Crafty.scene('startbildschirm');
+                        })
+                }
+            });
+            // registriere Eventhandler Steuerung
+            let winkelInitialisiert = false;
+            let ALPHA_INIT, BETA_INIT, GAMMA_INIT;
+            window.addEventListener('deviceorientation', evt => {
+                if (!winkelInitialisiert) {
+                    [ALPHA_INIT, BETA_INIT, GAMMA_INIT] = [evt.alpha, evt.beta, evt.gamma];
+                    winkelInitialisiert = true;
+                }
+                verarbeiteEvtSteuerung(evt);
+            });
+            window.addEventListener('touchstart', verarbeiteEvtSteuerung);
+            
+            function verarbeiteEvtSteuerung(evt) {
+                if (charakter) {
+                    charakter.trigger('steuerung', evt)
+                } else {
+                    console.log('Keine Charakter zur Steuerung vorhanden');
+                }
+            }
+        </script>
+    </body>
+</html>
