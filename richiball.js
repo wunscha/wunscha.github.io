@@ -1,4 +1,4 @@
-const PFAD_IMG = './img/';
+const PFAD_IMG = '.assets/img/';
 const HINTERGRUND = {w: 10000, h: 10000, pfad: './img/papier_zerknittert_orig.png'};
 const SPIELER = {w: 41, h: 81};
 const BTN_SPIELBEGINN = {w: 186, h: 91, pfad: './img/btn_spielbeginn.png'};
