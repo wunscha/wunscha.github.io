@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <!-- Bootstrap CSS -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
+    </head>
+    <style>
+        #hud {
+            display: flex;
+            align-items: center;
+            padding: 1em
+        }
+
+        #ctr-spieler-hud {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+        }
+
+        .spieler-hud {
+            padding-right: 1em;
+            font-weight: bold;
+        }
+    </style>
+    <body style="margin: 0">
+        <div style="display: flex; flex-direction: column" id="ctr">
+            <!-- HUD (Spieler mit Punkten (ausgegraut wenn neu), Rundenzahl, Menü mit "Zurücksetzen")-->
+            <div class="bg-dark text-white" id="hud">
+                <div class="hstack gap-1" id="ctr-spieler-hud"></div>
+                <div id="btn-menue">
+                    <button class="btn btn-secondary text-white" id="btn-spiel-zuruecksetzen">Zurücksetzen</button>
+                </div>
+            </div>
+            <!-- Monitor-div -->
+            <div id="monitor" style="flex-grow: 1;"></div>
+        </div>
+
+
+        <!-- Bootstrap JS -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js" integrity="sha384-w76AqPfDkMBDXo30jS1Sgez6pr3x5MlQ1ZAGC+nuZB+EYdgRZgiwxhTBTkF7CXvN" crossorigin="anonymous"></script>
+
+        <!-- Globale Einstellungen -->
+        <script src="./js/global.js"></script>
+        
+        <!-- Crafty -->
+        <script type="text/javascript" src="https://rawgithub.com/craftyjs/Crafty/release/dist/crafty-min.js"></script>
+        
+        <!-- Richiball -->
+        <script src="./js/richiball.js"></script>
+
+        <script>
+            // Global
+            document.querySelector('#ctr').style.height = window.innerHeight + 'px';
+            const DOM_MONITOR = document.querySelector('#monitor');
+            const MONITOR = {w: DOM_MONITOR.clientWidth, h: DOM_MONITOR.clientHeight};
+            let MAP_SPIELER = {} // mapSpieler;
+            const DOM_CTR_SPIELER_HUD = document.querySelector('#ctr-spieler-hud');
+            const STARTPUNKT_IDK = {x: HINTERGRUND.w / 2 - SPIELER.w / 2, y: HINTERGRUND.h / 2 - SPIELER.h / 2};
+            const STARTPUNKT_SPIELER = {x: STARTPUNKT_IDK.x, y: STARTPUNKT_IDK.y + SPIELER.h * 2};
+            let RUNDENZAEHLER = 0;
+            let IDK, RUNDENSIEGER;
+            let indexBildSpieler = -1;
+
+            // const Websocket (WS) herstellen
+            const STR_URL_WSS = `${SCHEME_WSS}${HOST_WSS}:${PORT_WSS}` // Url zum WSS
+            console.log('Öffne Websocket:', STR_URL_WSS);
+            const WS = new WebSocket(STR_URL_WSS, 'json');
+            WS.onopen = function() {
+                console.log('Websocket geöffnet');
+                console.log('Hole infoSpiel');
+                // TODO: spinner (sceneStart erst, wenn alle spieler geladen)
+                WS.send(JSON.stringify({ereignis: 'infoSpiel'})); 
+            };
+            // WS: 
+            WS.onmessage = function(msg) {
+                let msgData = JSON.parse(msg.data);
+                switch (msgData.ereignis) {
+                    case 'steuerung':
+                        let spieler = MAP_SPIELER[msgData.idController];
+                        if (spieler && spieler.entity && !spieler.entity.tot) {
+                            spieler.entity.trigger('steuerung', msgData);
+                        }
+                        break;
+                    case 'spielerNeu':
+                        anlegeSpieler(msgData);
+                        break;
+                    case 'infoSpiel':
+                        for (let s of msgData.arrSpieler) {anlegeSpieler(s);}
+                        break;
+                }
+            }
+            
+            // Initialisiere Crafty
+            Crafty.init(MONITOR.w, MONITOR.h, document.querySelector('#monitor'));
+            Crafty.scene('spielbeginn');
+            
+            /** 
+             * onclick für Spiel Zurücksetzen
+            */
+            document.querySelector('#btn-spiel-zuruecksetzen').addEventListener('click', (evt) => {
+                WS.send(JSON.stringify({ereignis: 'zuruecksetzeSpiel'}));
+                DOM_CTR_SPIELER_HUD.innerHTML = '';
+                MAP_SPIELER = {};
+            })
+
+            /** 
+             * Legt neuen Spieler an und macht ihn in MAP_SPIELER verfügbar
+            */
+            function anlegeSpieler(datenSpieler) {
+                if (!MAP_SPIELER[datenSpieler.idController]) {
+                    let spieler = {punkte: 0};
+                    Object.assign(spieler, datenSpieler);
+                    spieler.bild = `spieler_${datenSpieler.idController}.png`;
+                    MAP_SPIELER[datenSpieler.idController] = spieler;
+                    aktualisiereHud();
+                }
+            }
+
+            /** 
+             * Aktualisiert HUD
+            */
+            function aktualisiereHud() {
+                DOM_CTR_SPIELER_HUD.innerHTML = '';
+                for (let sp of Object.values(MAP_SPIELER)) {
+                    hinzufuegeSpielerHud(sp);
+                }
+            }
+
+            /** 
+             * Fügt Dom-Element für neuen Spieler zu HUD hinzu
+            */
+            function hinzufuegeSpielerHud(datenSpieler) {
+                let domSpielerNeuHud = document.createElement('div');
+                if (datenSpieler.entity && datenSpieler.entity.tot) {
+                    domSpielerNeuHud.style.color = 'red';
+                    domSpielerNeuHud.style.textDecoration = 'line-through';
+                }
+                domSpielerNeuHud.classList.add('spieler-hud');
+                
+                
+                let imgSpieler = document.createElement('img');
+                imgSpieler.src = PFAD_IMG + datenSpieler.bild;
+                imgSpieler.height = 30;
+                imgSpieler.style.marginRight = '1em';
+                domSpielerNeuHud.append(imgSpieler);
+                
+                let spanText = document.createElement('span');
+                spanText.innerText = `${datenSpieler.name}: ${datenSpieler.punkte}`;
+                domSpielerNeuHud.appendChild(spanText);
+
+                DOM_CTR_SPIELER_HUD.appendChild(domSpielerNeuHud);
+            }
+        </script>
+    </body>
+</html>

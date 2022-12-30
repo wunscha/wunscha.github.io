@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <!-- Bootstrap CSS -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
+    </head>
+    <body>
+        <!-- Modal Einstieg-Formular (input name; submit)-->
+        <div class="modal fade" data-bs-backdrop="static" id="modal-formular">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h1 class="modal-title">Spiel beitreten</h1>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-10">
+                                <input type="text" class="form-control" placeholder="Name eingeben..." id="ipt-name">
+                            </div>
+                            <button class="btn btn-dark col-2" disabled id="btn-submit">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controller-Schaltflächen -->
+        <div id="ctr-controller">
+            <div class="row" style="width: 100%; height: 100%;">
+                <button class="btn btn-danger col-6 actionbutton" disabled id="actionbutton-links"></button>
+                <button class="btn btn-success col-6 actionbutton" disabled id="actionbutton-rechts"></button>
+            </div>
+        </div>
+
+        <!-- Bootstrap JS -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js" integrity="sha384-w76AqPfDkMBDXo30jS1Sgez6pr3x5MlQ1ZAGC+nuZB+EYdgRZgiwxhTBTkF7CXvN" crossorigin="anonymous"></script>
+
+        <!-- Globale Einstellungen -->
+        <script src="./global.js"></script>
+
+        <script>
+            // Global
+            let SPIELER, ALPHA_INIT, BETA_INIT, GAMMA_INIT;
+            let neigungswinkelSindIntialisiert = false;
+            
+            // Erzeuge Websocket
+            const STR_URL_WSS = `${SCHEME_WSS}${HOST_WSS}:${PORT_WSS}` // Url zum WSS
+            console.log('Öffne Websocket:', STR_URL_WSS);
+            const WS = new WebSocket(STR_URL_WSS, 'json');
+            WS.onopen = function() {console.log('Websocket geöffnet');};
+
+            WS.onmessage = function(msg) {
+                let msgData = JSON.parse(msg.data);
+                switch (msgData.ereignis) {
+                    case 'spielerNeu':
+                        SPIELER = msgData;
+                        initialisiereController();
+                }
+            }
+            
+            // Formular Einstieg: 
+            let bsModalFormular = new bootstrap.Modal(document.querySelector('#modal-formular'));
+            bsModalFormular.show();
+            const domIptName = document.querySelector('#ipt-name');
+            const domBtnSubmit = document.querySelector('#btn-submit');
+
+            domIptName.addEventListener('input', evt => {
+                domBtnSubmit.disabled = !(domIptName.value.length > 0);
+            })
+            
+            domBtnSubmit.addEventListener('click', evt => {
+                let msg = {ereignis: 'spielerNeu', name: domIptName.value};
+                WS.send(JSON.stringify(msg));
+                bsModalFormular.hide()
+            })
+
+            // Controller
+            const domCtrController = document.querySelector('#ctr-controller');
+            domCtrController.style.width = window.innerWidth + 'px';
+            domCtrController.style.height = window.innerHeight + 'px';
+
+            /** 
+             * Initialisiert Steuerung
+            */
+            function initialisiereController() {
+                // Listener Actionbuttons
+                for (let aBtn of document.querySelectorAll('.actionbutton')) {
+                    aBtn.disabled = false;
+                    aBtn.addEventListener('mousedown', beiSteuerungButton);
+                    aBtn.addEventListener('mouseup', beiSteuerungButton);
+                    aBtn.addEventListener('touchstart', beiSteuerungButton);
+                    aBtn.addEventListener('touchend', beiSteuerungButton);
+                }
+                // Listener Neigung
+                window.addEventListener('deviceorientation', evt => {
+                    if (!neigungswinkelSindIntialisiert) {
+                        ALPHA_INIT = evt.alpha;
+                        BETA_INIT = evt.beta;
+                        GAMMA_INIT = evt.gamma;
+                        neigungswinkelSindIntialisiert = true;
+                    }
+                    const msg = {
+                        idController: SPIELER.idController,
+                        ereignis: 'steuerung',
+                        type: evt.type,
+                        // Nur notwendige Winkel mitschicken!
+                        // alpha: evt.alpha - ALPHA_INIT,
+                        // beta: evt.beta - BETA_INIT,
+                        gamma: evt.gamma - GAMMA_INIT,
+                    };
+                    WS.send(JSON.stringify(msg));
+                })
+            }
+
+            /** 
+             * Handler für Down-/Up-Events bei Buttons (Click /Touch)
+             * Bereitet evt auf und sendet es an WSS
+            */
+            function beiSteuerungButton(evt) {
+                const msg = {
+                    idController: SPIELER.idController,
+                    ereignis: 'steuerung',
+                    type: evt.type,
+                    target: {id: evt.target.id},
+                }
+                WS.send(JSON.stringify(msg));
+            }
+
+            // TODO: WS: Listener für andere Ereignisse (zB wenn Tot --> vibrieren; steuerung-evts nur senden wenn nicht tot (Performance))
+        </script>
+    </body>
+</html>
